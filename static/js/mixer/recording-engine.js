@@ -640,15 +640,22 @@ class RecordingEngine {
 
         // Stop all recorders and decode
         for (const [key, info] of this.activeRecorders) {
-            const micBlob = await this._stopMediaRecorder(info.recorder, info.chunks);
-
-            const arrayBuffer = await micBlob.arrayBuffer();
-            let audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-            audioBuffer = this.applyLatencyCompensation(audioBuffer);
-
-            decodedAudio.set(key, audioBuffer);
+            try {
+                const micBlob = await this._stopMediaRecorder(info.recorder, info.chunks);
+                console.log('[REC-DEBUG] key', key, '— chunks:', info.chunks.length, 'blob size:', micBlob && micBlob.size, 'type:', micBlob && micBlob.type);
+                if (!micBlob || micBlob.size === 0) { console.warn('[REC-DEBUG] empty blob for', key, '→ no audio captured'); continue; }
+                const arrayBuffer = await micBlob.arrayBuffer();
+                let audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                console.log('[REC-DEBUG] decoded', key, '— duration:', audioBuffer.duration.toFixed(2), 's, channels:', audioBuffer.numberOfChannels, 'sr:', audioBuffer.sampleRate);
+                audioBuffer = this.applyLatencyCompensation(audioBuffer);
+                console.log('[REC-DEBUG] after latency-comp', key, '— duration:', audioBuffer.duration.toFixed(2), 's (trimmed', Math.round(this.getEffectiveLatency()*1000), 'ms)');
+                decodedAudio.set(key, audioBuffer);
+            } catch (err) {
+                console.error('[REC-DEBUG] decode/stop FAILED for key', key, ':', err && err.name, err && err.message);
+            }
         }
         this.activeRecorders.clear();
+        console.log('[REC-DEBUG] decodedAudio keys:', [...decodedAudio.keys()], '| recordingTrackIds:', this.recordingTrackIds.slice(), '| track deviceIds:', this.recordingTrackIds.map(id => { var r = this._findRecording(id); return r ? (r.deviceId || 'default') : '?'; }));
 
         // Fill each armed track with its device's audio
         const results = [];

@@ -144,7 +144,9 @@
 
                 
                 <div class="tab-content" id="mixerTab">
-                    <div class="mixer-header-with-title">
+                    <!-- Title is shown inside the mixer iframe (POC header, green).
+                         Parent header hidden to avoid a duplicate title. -->
+                    <div class="mixer-header-with-title" style="display:none">
                         <h2>Audio Mixer</h2>
                         <span class="mixer-song-title" id="mixer-song-title-display"></span>
                     </div>

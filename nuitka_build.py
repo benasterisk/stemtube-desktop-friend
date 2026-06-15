@@ -187,6 +187,7 @@ DATA_INCLUDES = [
     ("templates",                "templates"),
     ("static",                   "static"),
     ("core/config.json",         "core/config.json"),
+    ("core/poc/samples",         "core/poc/samples"),   # metronome instrument one-shots
     ("external/BTC-ISMIR19",     "external/BTC-ISMIR19"),
     ("patch_madmom.py",          "patch_madmom.py"),
 ]
@@ -386,6 +387,7 @@ def build_nuitka_command(args: argparse.Namespace) -> list[str]:
     cmd.append(f"--include-data-dir={PROJECT_DIR / 'templates'}=templates")
     cmd.append(f"--include-data-dir={PROJECT_DIR / 'static'}=static")
     cmd.append(f"--include-data-dir={PROJECT_DIR / 'external' / 'BTC-ISMIR19'}=external/BTC-ISMIR19")
+    cmd.append(f"--include-data-dir={PROJECT_DIR / 'core' / 'poc' / 'samples'}=core/poc/samples")
     cmd.append(f"--include-data-files={PROJECT_DIR / 'core' / 'config.json'}=core/config.json")
     cmd.append(f"--include-data-files={PROJECT_DIR / 'patch_madmom.py'}=patch_madmom.py")
 

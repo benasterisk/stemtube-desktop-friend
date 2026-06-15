@@ -43,6 +43,7 @@ datas = [
     ('templates', 'templates'),
     ('static', 'static'),
     ('core/config.json', 'core'),
+    ('core/poc/samples', 'core/poc/samples'),   # metronome instrument one-shots (read at runtime)
     ('external/BTC-ISMIR19', 'external/BTC-ISMIR19'),
     ('patch_madmom.py', '.'),
 ]

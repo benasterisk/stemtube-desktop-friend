@@ -15,6 +15,11 @@ logs/
 .secret_key
 .license
 .trial
+.env
+*.env
+# Secrets / personal session data — NEVER commit (live auth cookies)
+*cookies*.txt
+core/youtube_cookies.txt
 core/ffmpeg/
 core/downloads/
 core/models/

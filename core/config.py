@@ -25,7 +25,10 @@ APP_AUTHOR = "StemTube"
 # Server Configuration - SINGLE SOURCE OF TRUTH
 # ============================================================================
 PORT = 5011
-HOST = "127.0.0.1"  # Desktop mode: localhost only
+# 0.0.0.0 = listen on all interfaces so the app is reachable from other devices
+# on the LAN (e.g. http://<machine-LAN-IP>:5011). NOTE: there is no real network
+# auth (desktop auto-login) — only expose this on a trusted local network.
+HOST = "0.0.0.0"
 
 # Paths
 # APP_DIR = where the core/ module lives (read-only in installed mode)

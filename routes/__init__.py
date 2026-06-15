@@ -14,6 +14,7 @@ from .library import library_bp
 from .files import files_bp
 from .config_routes import config_bp
 from .recordings import recordings_bp
+from .poc_mixer import poc_mixer_bp
 
 ALL_BLUEPRINTS = [
     pages_bp,
@@ -25,6 +26,7 @@ ALL_BLUEPRINTS = [
     files_bp,
     config_bp,
     recordings_bp,
+    poc_mixer_bp,
 ]
 
 if HAS_LICENSE:

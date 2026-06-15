@@ -48,13 +48,21 @@ def get_port():
 
 
 def wait_for_server(port, timeout=60):
-    """Wait until the Flask server is responding."""
+    """Wait until the Flask server is responding.
+
+    Any HTTP response means the server is up — even a 404. (This is the "Friend"
+    edition with auto-login on '/', so there is no '/login' route; polling it would
+    404 forever. An HTTPError still proves the server answers, so we accept it.)
+    """
     import urllib.request
+    import urllib.error
     start = time.time()
     while time.time() - start < timeout:
         try:
-            urllib.request.urlopen(f'http://127.0.0.1:{port}/login', timeout=2)
+            urllib.request.urlopen(f'http://127.0.0.1:{port}/', timeout=2)
             return True
+        except urllib.error.HTTPError:
+            return True  # server responded (any status) → it's up
         except Exception:
             time.sleep(0.5)
     return False
@@ -65,10 +73,13 @@ def start_flask_server(port):
     # Import app module (triggers GPU config, bootstrap, etc.)
     from app import app, socketio
 
-    print(f"[LAUNCHER] Starting Flask server on 127.0.0.1:{port}")
+    # Bind on all interfaces so other devices on the LAN can reach the app.
+    # (The native window below still opens via 127.0.0.1.)
+    from core.config import HOST as _BIND_HOST
+    print(f"[LAUNCHER] Starting Flask server on {_BIND_HOST}:{port}")
     socketio.run(
         app,
-        host='127.0.0.1',
+        host=_BIND_HOST,
         port=port,
         debug=False,
         allow_unsafe_werkzeug=True,

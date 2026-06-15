@@ -270,7 +270,8 @@ if HAS_LICENSE:
 # Run
 # ------------------------------------------------------------------
 if __name__ == '__main__':
-    # Desktop mode: bind to localhost only (not exposed to network)
-    desktop_host = '127.0.0.1'
+    # Bind host comes from config (HOST). 0.0.0.0 exposes the app on the LAN;
+    # 127.0.0.1 keeps it local-only. (No real network auth — LAN-trusted only.)
+    desktop_host = HOST
     logger.info(f"Starting StemTube Desktop on {desktop_host}:{PORT}")
     socketio.run(app, host=desktop_host, port=PORT, debug=False, allow_unsafe_werkzeug=True)
