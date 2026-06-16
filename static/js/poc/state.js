@@ -31,6 +31,10 @@ const SessionState = {
       precountActive: window.PreCount ? PreCount.active : undefined,
       // metronome-stop marker (null = click runs to the end)
       stopTime: window.PreCount ? PreCount.stopTime : undefined,
+      // A/B loop region + enabled state
+      loopA: window.LoopSel ? LoopSel.a : undefined,
+      loopB: window.LoopSel ? LoopSel.b : undefined,
+      loopEnabled: window.LoopSel ? LoopSel.enabled : undefined,
       tracks,
     };
     all._lastJob = job;
@@ -73,6 +77,12 @@ const SessionState = {
       if(typeof st.precountActive === "boolean") PreCount._pendingActive = st.precountActive;
       // stopTime may be a number OR null (explicitly no cutoff); both override meta.
       if("stopTime" in st && (typeof st.stopTime === "number" || st.stopTime === null)) PreCount._pendingStop = st.stopTime;
+    }
+    // A/B loop — stash as pending; LoopSel.load() consumes after meta is known
+    if(window.LoopSel){
+      if(typeof st.loopA === "number") LoopSel._pendingA = st.loopA;
+      if(typeof st.loopB === "number") LoopSel._pendingB = st.loopB;
+      if(typeof st.loopEnabled === "boolean") LoopSel._pendingEnabled = st.loopEnabled;
     }
     return true;
   },

@@ -246,6 +246,8 @@ window.UI = UI; // mixer/loader reference UI.clearTracks
 TempoPitch.init(engine, view);
 // Count-in / Start-marker controller.
 PreCount.init(engine, view);
+// A/B loop selection controller.
+if(window.LoopSel) LoopSel.init(engine, view);
 // Load the SoundTouch worklet up front so stems get their node on first play.
 // (Needs a secure context: localhost is fine; remote needs HTTPS.)
 engine.loadWorklet().then(ok=>{ if(!ok) UI.status("Tempo/pitch disabled (insecure context — use localhost or HTTPS)."); });

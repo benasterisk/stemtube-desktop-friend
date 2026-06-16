@@ -175,6 +175,7 @@ const View = {
     const ph=document.getElementById("playhead-line");
     if(ph) ph.style.height=(26 + this.lanesTotalH())+"px";   // 26 = timeline ruler height
     if(window.PreCount){ PreCount.drawMarker(); PreCount.drawStopMarker(); }   // keep Start/Stop markers in sync with zoom
+    if(window.LoopSel) LoopSel.draw();   // keep the loop band in sync with zoom
     this.drawPlayheads();
   },
 

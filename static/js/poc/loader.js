@@ -54,6 +54,7 @@ const Loader = {
     SessionState.syncControls(this.view, this.engine);
     if(window.TempoPitch) TempoPitch.load(meta);
     if(window.PreCount) PreCount.load(meta);
+    if(window.LoopSel) LoopSel.load(meta);
     this.view.redrawAll();
     this.hide();
     SessionState.save(job, this.view, this.engine);

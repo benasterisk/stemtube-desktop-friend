@@ -156,28 +156,62 @@ const Mixer = {
     const instSel = left.querySelector("select.metroinst");
     if(instSel) this._wireMetroInstrument(instSel, engine, view);
 
-    // seek by clicking a lane (manual nav → leave Follow as-is; centering on
-    // next frame will recenter if Follow is on, which is the expected behavior)
-    lanes.querySelectorAll("canvas").forEach(cv=> cv.onclick=e=>{
-      const rect=e.target.getBoundingClientRect();
+    // Lane interaction:
+    //  - DRAG across a waveform → define the A/B loop region (snaps to beats; spans
+    //    all tracks since they share one timeline). Hold Alt to disable snapping.
+    //  - simple CLICK (no drag) → seek there.
+    //  - Alt/Shift-click (no drag) → move the count-in Start marker.
+    //  - Ctrl/Cmd-click (no drag) → set the metronome-stop marker.
+    const swallowBake=err=>console.warn("[mixer] marker re-bake failed:", err);
+    const laneTime=(cv,clientX)=>{
+      const rect=cv.getBoundingClientRect();
       // canvas is viewport-sized & pinned at left:scrollX, so add scrollX to get song-x
-      const songX = view.scrollX() + (e.clientX - rect.left);
-      const t=view.xToTime(songX);
-      // Alt/Shift-click moves the count-in Start marker (snapped to nearest beat).
-      // (these trigger an async server re-bake; swallow rejections to avoid an
-      // unhandledrejection — the failure is surfaced via UI.status in detectIntro.)
-      const swallowBake=err=>console.warn("[mixer] marker re-bake failed:", err);
-      if((e.altKey || e.shiftKey) && window.PreCount){
-        Promise.resolve(PreCount.setStartFromTime(t)).catch(swallowBake);
-        return;
-      }
-      // Ctrl/Cmd-click sets the metronome-stop marker (where the click goes silent).
-      if((e.ctrlKey || e.metaKey) && window.PreCount){
-        Promise.resolve(PreCount.setStopFromTime(t)).catch(swallowBake);
-        return;
-      }
-      engine.seek(t); view.drawPlayheads();
-      if(window.Loader) Loader.persist();
+      return view.xToTime(view.scrollX() + (clientX - rect.left));
+    };
+    const DRAG_PX=4;   // movement beyond this = a drag (loop), below = a click (seek)
+    lanes.querySelectorAll("canvas").forEach(cv=>{
+      cv.addEventListener("mousedown", e=>{
+        if(e.button!==0) return;                       // left button only
+        // a modifier means "place a marker on click" → don't start a loop drag
+        if(e.altKey||e.shiftKey||e.ctrlKey||e.metaKey){ cv._mods=true; cv._downX=e.clientX; cv._downT=laneTime(cv,e.clientX); return; }
+        cv._mods=false; cv._downX=e.clientX; cv._downT=laneTime(cv,e.clientX);
+        cv._loopDragging=true; cv._moved=false;
+        e.preventDefault();
+      });
+      cv.addEventListener("mousemove", e=>{
+        if(!cv._loopDragging) return;
+        if(Math.abs(e.clientX-cv._downX) > DRAG_PX){
+          cv._moved=true;
+          if(window.LoopSel){ LoopSel.setRegion(cv._downT, laneTime(cv,e.clientX), e.altKey); }
+        }
+      });
+      const endDrag=e=>{
+        // modifier-click (no drag) → markers
+        if(cv._mods && Math.abs(e.clientX-cv._downX)<=DRAG_PX){
+          const t=cv._downT;
+          if((e.altKey||e.shiftKey) && window.PreCount){ Promise.resolve(PreCount.setStartFromTime(t)).catch(swallowBake); }
+          else if((e.ctrlKey||e.metaKey) && window.PreCount){ Promise.resolve(PreCount.setStopFromTime(t)).catch(swallowBake); }
+          cv._mods=false; return;
+        }
+        if(!cv._loopDragging) return;
+        cv._loopDragging=false;
+        if(cv._moved){
+          // finalize the loop region (already drawn during move); persist
+          if(window.LoopSel) LoopSel.setRegion(cv._downT, laneTime(cv,e.clientX), e.altKey);
+          if(window.Loader) Loader.persist();
+        } else {
+          // no movement → plain seek
+          engine.seek(cv._downT); view.drawPlayheads();
+          if(window.Loader) Loader.persist();
+        }
+      };
+      cv.addEventListener("mouseup", endDrag);
+    });
+    // a mouseup anywhere ends a drag that left the canvas
+    window.addEventListener("mouseup", e=>{
+      lanes.querySelectorAll("canvas").forEach(cv=>{
+        if(cv._loopDragging){ cv._loopDragging=false; if(cv._moved && window.LoopSel){ if(window.Loader) Loader.persist(); } }
+      });
     });
   },
 

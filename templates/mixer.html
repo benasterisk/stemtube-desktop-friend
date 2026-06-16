@@ -332,6 +332,11 @@
   #stop-line { position:absolute; top:0; width:0; border-left:2px dashed #ffb02e; pointer-events:none; z-index:3; left:0; }
   #stop-line::before { content:"⏹"; position:absolute; top:-1px; left:-15px; font-size:13px; line-height:1;
     color:#08210f; background:#ffb02e; padding:1px 3px 2px; border-radius:4px 0 0 4px; }
+  /* A/B loop region — a translucent band from A to B across timeline + all lanes.
+     Defined by dragging on a waveform; spans every track. Brighter borders when looping. */
+  #loop-region { position:absolute; top:0; left:0; pointer-events:none; z-index:2;
+    background:rgba(90,141,239,.12); border-left:2px solid rgba(90,141,239,.7); border-right:2px solid rgba(90,141,239,.7); }
+  #loop-region.on { background:rgba(90,141,239,.22); border-left-color:#5a8def; border-right-color:#5a8def; }
   /* count-in overlay number — fixed, centered on the whole viewport */
   #countdown { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     font-size:160px; font-weight:800; color:var(--accent); opacity:.92; text-shadow:0 4px 28px rgba(0,0,0,.7);
@@ -561,6 +566,7 @@
   <button id="playBtn" disabled title="Play / Pause"><span class="ico">▶</span></button>
   <button id="fromStartBtn" disabled title="Play from the Start marker (with count-in)"><span class="ico">⚑</span></button>
   <button id="stopBtn" disabled title="Stop and rewind to start"><span class="ico">■</span></button>
+  <button id="loopBtn" class="toggle" disabled title="Loop — glisse sur une piste pour définir une zone à boucler, puis active le bouclage"><span class="ico">🔁</span></button>
   <button id="recordBtn" disabled title="Enregistrer (armer une piste d'abord)"><span class="dot"></span></button>
   <button id="addTrackBtn" disabled title="Ajouter une piste d'enregistrement"><span class="ico">＋</span></button>
   <span class="time" id="latency-value" title="Latence d'enregistrement compensée" style="min-width:auto"></span>
@@ -743,6 +749,7 @@
 <script src="{{ url_for('static', filename='js/poc/mixer.js') }}?v={{ cache_buster }}"></script>
 <script src="{{ url_for('static', filename='js/poc/tempo.js') }}?v={{ cache_buster }}"></script>
 <script src="{{ url_for('static', filename='js/poc/precount.js') }}?v={{ cache_buster }}"></script>
+<script src="{{ url_for('static', filename='js/poc/loop.js') }}?v={{ cache_buster }}"></script>
 <script src="{{ url_for('static', filename='js/poc/loader.js') }}?v={{ cache_buster }}"></script>
 <script src="{{ url_for('static', filename='js/poc/main.js') }}?v={{ cache_buster }}"></script>
 <script src="{{ url_for('static', filename='js/poc/export.js') }}?v={{ cache_buster }}"></script>

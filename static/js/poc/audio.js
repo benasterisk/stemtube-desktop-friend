@@ -33,6 +33,9 @@ class AudioEngine {
     this._anchorPos  = 0;     // song position at the anchor
     this._anchorTime = null;  // ctx.currentTime at the anchor
     this._anchorRatio = 1.0;  // syncRatio in effect since the anchor
+
+    // A/B seamless loop (native source looping)
+    this.loopOn = false; this.loopA = null; this.loopB = null;
   }
   ensureCtx(){
     if(!this.ctx){
@@ -219,6 +222,7 @@ class AudioEngine {
   unload(){
     this.stop();
     this.stems = {}; this.staticPos = 0; this.duration = 0;
+    this.loopOn = false; this.loopA = null; this.loopB = null;   // reset loop across songs
     // keep tempo/pitch state so it persists across songs (R2 caches it too)
   }
 
@@ -295,11 +299,47 @@ class AudioEngine {
     });
   }
 
+  // ── Seamless A/B loop (native AudioBufferSourceNode looping) ──────────────
+  // Looping is done IN the audio engine (source.loop + loopStart/loopEnd), not by
+  // re-seeking, so it wraps sample-accurately with ZERO gap. loopA/loopB are in
+  // SONG time (seconds); each source's loop points add its own read offset (the
+  // precount metro's lead silence), exactly like srcOffset in _startOneSource.
+  // pos() folds the (linearly advancing) anchor position back into [a,b] so the
+  // playhead/chords/lyrics stay in sync with what the buffers actually play.
+  setLoop(a, b, on){
+    this.loopOn = !!on && (a!=null) && (b!=null) && (b>a);
+    this.loopA = a; this.loopB = b;
+    // apply to every live source
+    Object.values(this.stems).forEach(s=> this._applyLoopToSource(s));
+    // re-anchor so pos() is consistent with the (possibly just-enabled) loop window
+    if(this.playing) this._reanchor();
+  }
+  _applyLoopToSource(s){
+    if(!s || !s.source) return;
+    const extra = this._offsetExtraFor(s.name);   // metroLeadSilence for precount metro, else 0
+    try{
+      if(this.loopOn){
+        s.source.loopStart = Math.max(0, this.loopA + extra);
+        s.source.loopEnd   = Math.max(s.source.loopStart + 0.01, this.loopB + extra);
+        s.source.loop = true;
+      } else {
+        s.source.loop = false;
+      }
+    }catch(e){}
+  }
+
   // ── Position (anchor-based, drift-free, tempo-aware) ──────────────────────
   pos(){
     if(!this.playing) return this.staticPos;
     if(this._anchorTime === null) return this._anchorPos;
-    return this._anchorPos + (this.ctx.currentTime - this._anchorTime) * this._anchorRatio;
+    let p = this._anchorPos + (this.ctx.currentTime - this._anchorTime) * this._anchorRatio;
+    // When looping, the buffer wraps b→a natively; fold the linear anchor reading
+    // back into the [a,b] window so reported position matches the audio.
+    if(this.loopOn && this.loopB > this.loopA && p >= this.loopA){
+      const span = this.loopB - this.loopA;
+      if(p >= this.loopB) p = this.loopA + ((p - this.loopA) % span);
+    }
+    return p;
   }
   _reanchor(position=null){
     const now = this.ctx ? this.ctx.currentTime : 0;
@@ -345,6 +385,9 @@ class AudioEngine {
       src.connect(g); g.connect(pan); s.soundTouch=null;
     }
     s.source=src; s.gain=g; s.panNode=pan;
+
+    // If an A/B loop is armed, set the source's native loop points (seamless wrap).
+    this._applyLoopToSource(s);
 
     // Where this source's audio sits, in SONG time, including the precount metro's
     // baked lead silence (metro reads `extra` deeper so its body lines up with stems).
