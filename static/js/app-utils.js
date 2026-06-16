@@ -191,6 +191,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (settingsBtn) {
         settingsBtn.addEventListener('click', function() {
             loadSystemSettings();
+            // Initialize the YouTube cookies panel (no-op if the section isn't present,
+            // e.g. editions without YouTube). Defined in app-extensions.js.
+            if (typeof initCookiesManagement === 'function') initCookiesManagement();
         });
     }
 });
