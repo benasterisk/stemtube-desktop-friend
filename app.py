@@ -140,9 +140,18 @@ logger.info("Database cleanup completed")
 # ------------------------------------------------------------------
 if HAS_YOUTUBE:
     def check_ytdlp_update():
-        """Check and update yt-dlp nightly at startup to avoid YouTube blocks."""
+        """Check and update yt-dlp nightly to avoid YouTube blocks.
+
+        Runs in a BACKGROUND daemon thread so it NEVER delays the web server
+        startup: this is a network call (pip install) that can take 25–120s,
+        and doing it synchronously before socketio.run() made the server miss
+        the launcher's 120s startup timeout on slower machines/connections
+        (the app would fail to open). The update is best-effort; if it's still
+        running when the user triggers a download, yt-dlp simply uses the
+        currently-installed version.
+        """
         try:
-            logger.info("Checking for yt-dlp nightly updates...")
+            logger.info("Checking for yt-dlp nightly updates (background)...")
             # CREATE_NO_WINDOW prevents a console flash when spawned from a
             # GUI parent (Tauri shell). Falls back to 0 on non-Windows.
             no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -161,7 +170,10 @@ if HAS_YOUTUBE:
         except Exception as e:
             logger.warning(f"Could not check yt-dlp updates: {e}")
 
-    check_ytdlp_update()
+    # Fire-and-forget in a daemon thread so the web server binds the port
+    # immediately (the launcher waits for that, with a 120s budget).
+    import threading as _threading
+    _threading.Thread(target=check_ytdlp_update, daemon=True).start()
 
 # ------------------------------------------------------------------
 # Flask & SocketIO setup
