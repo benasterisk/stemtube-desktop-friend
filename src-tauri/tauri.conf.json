@@ -1,6 +1,6 @@
 {
   "productName": "StemTube Desktop Friend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.stemtube.desktop.friend",
   "build": {
     "frontendDist": "../dist",

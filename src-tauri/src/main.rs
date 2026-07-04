@@ -3,14 +3,15 @@
 // Flow:
 // 1. Tauri opens immediately with splash.html (small window with progress bar)
 // 2. Background thread runs first_run_setup:
-//    - GPU detection
-//    - Download multi-part backend archive from GitHub Releases
-//    - Concatenate parts into a single zip
-//    - Extract with PowerShell Expand-Archive
+//    - GPU detection → selects the GPU or CPU backend archive
+//    - Download backend archive (multi-part for GPU) from GitHub Releases
+//    - Concatenate parts into a single zip (GPU only)
+//    - Extract with tar.exe / PowerShell Expand-Archive
 //    - Emits `setup_progress` events to the splash window at each step
-// 3. Once backend is installed, launch Python venv
-// 4. Wait for Flask on 127.0.0.1:5011
-// 5. Navigate the splash window to the Flask URL (main UI)
+// 3. Repair the venv if its base interpreter is missing (portable Python)
+// 4. Once backend is installed, launch Python venv
+// 5. Wait for Flask on 127.0.0.1:5011
+// 6. Navigate the splash window to the Flask URL (main UI)
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -29,7 +30,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const PORT: u16 = 5011;
-const STARTUP_TIMEOUT_SECS: u64 = 120;
+const STARTUP_TIMEOUT_SECS: u64 = 300;
 // Win32 CREATE_NO_WINDOW flag — prevents the spawned subprocess from
 // allocating or attaching to a console window. Used for the Python backend
 // and helper PowerShell calls so the user only sees the Tauri WebView.
@@ -52,10 +53,17 @@ const MAIN_WINDOW_WIDTH: f64 = 1400.0;
 const MAIN_WINDOW_HEIGHT: f64 = 900.0;
 
 const RELEASE_BASE: &str = "https://github.com/benasterisk/stemtube-desktop-friend-releases/releases/download/v1.0.0";
-const BACKEND_PARTS: &[&str] = &[
+// GPU build is split into <2 GB parts (GitHub asset size limit); CPU build fits in one file.
+const GPU_BACKEND_PARTS: &[&str] = &[
     "stemtube-backend-friend-gpu.zip.000",
     "stemtube-backend-friend-gpu.zip.001",
 ];
+const CPU_BACKEND_PARTS: &[&str] = &["stemtube-backend-friend-cpu.zip"];
+const GPU_COMBINED_NAME: &str = "stemtube-backend-friend-gpu.zip";
+const CPU_COMBINED_NAME: &str = "stemtube-backend-friend-cpu.zip";
+// Official embeddable CPython, must match the venv's major.minor (3.12).
+const PYTHON_EMBED_URL: &str = "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip";
+const PYTHON_EMBED_VERSION: &str = "3.12.10";
 
 struct AppState {
     backend: Mutex<Option<Child>>,
@@ -275,6 +283,7 @@ fn extract_zip_with_progress(
     app: &AppHandle,
     zip: &PathBuf,
     dest_dir: &PathBuf,
+    step_label: &str,
 ) -> Result<(), String> {
     println!("[Setup] Extracting {} → {}", zip.display(), dest_dir.display());
     fs::create_dir_all(dest_dir).ok();
@@ -327,9 +336,9 @@ fn extract_zip_with_progress(
         let current = dir_size(dest_dir);
         if estimated_total > 0 {
             let clamped = current.min(estimated_total);
-            emit_progress(app, "Extracting backend…", clamped, estimated_total);
+            emit_progress(app, step_label, clamped, estimated_total);
         } else {
-            emit_step(app, &format!("Extracting backend… ({} MB)", current / 1024 / 1024), true);
+            emit_step(app, &format!("{} ({} MB)", step_label, current / 1024 / 1024), true);
         }
 
         match child.try_wait() {
@@ -343,7 +352,7 @@ fn extract_zip_with_progress(
                 }
                 // Final ping
                 let final_size = dir_size(dest_dir);
-                emit_progress(app, "Extracted", final_size, final_size);
+                emit_progress(app, step_label, final_size, final_size);
                 return Ok(());
             }
             Ok(None) => continue,
@@ -371,21 +380,28 @@ fn dir_size(path: &PathBuf) -> u64 {
 fn first_run_setup(app: AppHandle) -> Result<(), String> {
     emit_step(&app, "Detecting GPU…", true);
     let gpu = detect_nvidia_gpu();
-    if let Some(ref name) = gpu {
-        println!("[Setup] GPU detected: {}", name);
-    } else {
-        println!("[Setup] No GPU detected");
-    }
+    let (parts, combined_name): (&[&str], &str) = match gpu {
+        Some(ref name) => {
+            println!("[Setup] GPU detected: {}", name);
+            log_shell(&format!("GPU detected ({}) → GPU backend", name));
+            (GPU_BACKEND_PARTS, GPU_COMBINED_NAME)
+        }
+        None => {
+            println!("[Setup] No NVIDIA GPU → CPU backend");
+            log_shell("No NVIDIA GPU detected → CPU backend");
+            (CPU_BACKEND_PARTS, CPU_COMBINED_NAME)
+        }
+    };
 
     let work_dir = data_dir().join("download");
     fs::create_dir_all(&work_dir).ok();
 
     // Download all parts
     let mut local_parts: Vec<PathBuf> = Vec::new();
-    for (idx, part) in BACKEND_PARTS.iter().enumerate() {
+    for (idx, part) in parts.iter().enumerate() {
         let url = format!("{}/{}", RELEASE_BASE, part);
         let dest = work_dir.join(part);
-        let label = format!("Downloading part {}/{}", idx + 1, BACKEND_PARTS.len());
+        let label = format!("Downloading part {}/{}", idx + 1, parts.len());
 
         // Skip if already downloaded and size > 100MB (trust previous attempts)
         let existing_size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
@@ -397,15 +413,27 @@ fn first_run_setup(app: AppHandle) -> Result<(), String> {
         local_parts.push(dest);
     }
 
-    // Concatenate
-    emit_step(&app, "Assembling archive…", true);
-    let combined = work_dir.join("stemtube-backend-friend-gpu.zip");
-    concat_parts(&local_parts, &combined)?;
+    // Concatenate. The CPU build is a single file whose download dest already
+    // matches `combined_name`, so only the multi-part GPU build needs a concat.
+    let combined = work_dir.join(combined_name);
+    if local_parts.len() > 1 {
+        emit_step(&app, "Assembling archive…", true);
+        concat_parts(&local_parts, &combined)?;
+    }
 
     // Extract
     let extract_dir = data_dir().join("stemtube-backend-friend");
     fs::create_dir_all(&extract_dir).ok();
-    extract_zip_with_progress(&app, &combined, &extract_dir)?;
+    if let Err(e) = extract_zip_with_progress(&app, &combined, &extract_dir, "Extracting backend…") {
+        // Drop the downloaded archive(s): a truncated file would otherwise be
+        // trusted forever by the size-based skip heuristic above, and every
+        // relaunch would fail on the same corrupt zip.
+        for p in &local_parts {
+            fs::remove_file(p).ok();
+        }
+        fs::remove_file(&combined).ok();
+        return Err(e);
+    }
 
     // Cleanup
     emit_step(&app, "Cleaning up…", true);
@@ -423,6 +451,170 @@ fn first_run_setup(app: AppHandle) -> Result<(), String> {
             backend_dir().display()
         ))
     }
+}
+
+// --- Portable Python runtime & venv self-repair ---
+//
+// The backend archive ships the build machine's venv verbatim. A Windows venv
+// is not relocatable: venv\Scripts\python.exe is a redirector stub that needs
+// the base interpreter at the `home` path written in venv\pyvenv.cfg — a path
+// that only exists on the build machine (exit code 103 "No Python at ..."
+// everywhere else). Remedy: download the official embeddable CPython once
+// into <data_dir>\python-embed, disable its ._pth file (while present it pins
+// sys.path and the venv's site-packages would never load), and rewrite
+// pyvenv.cfg to point at it. Checked on every startup; no-op when healthy.
+
+fn read_pyvenv_home(backend: &PathBuf) -> Option<String> {
+    let cfg_path = backend.join("venv").join("pyvenv.cfg");
+    let content = fs::read_to_string(&cfg_path).ok()?;
+    for line in content.lines() {
+        if let Some((key, value)) = line.split_once('=') {
+            if key.trim().eq_ignore_ascii_case("home") {
+                return Some(value.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
+/// True when the base interpreter referenced by pyvenv.cfg is missing on
+/// this machine (the exit-103 symptom).
+fn venv_needs_repair(backend: &PathBuf) -> bool {
+    if !python_exe(backend).exists() {
+        return false; // no venv at all — repair cannot help
+    }
+    match read_pyvenv_home(backend) {
+        // python312.dll next to python.exe guards against a `home` path that
+        // exists but holds a different Python version than the venv (3.12).
+        Some(home) => {
+            let home = PathBuf::from(&home);
+            !(home.join("python.exe").exists() && home.join("python312.dll").exists())
+        }
+        // venv present but pyvenv.cfg missing, unreadable or home-less: the
+        // stub cannot resolve a base interpreter — regenerate the cfg.
+        None => true,
+    }
+}
+
+/// Download + prepare the embeddable CPython under <data_dir>\python-embed.
+/// Idempotent: returns immediately when python.exe is already there.
+fn ensure_portable_python(app: &AppHandle) -> Result<PathBuf, String> {
+    let py_dir = data_dir().join("python-embed");
+    let py_exe = py_dir.join("python.exe");
+    if py_exe.exists() {
+        return Ok(py_dir);
+    }
+
+    log_shell("Portable Python missing, downloading embeddable runtime");
+    let work_dir = data_dir().join("download");
+    fs::create_dir_all(&work_dir).ok();
+    let zip = work_dir.join("python-embed.zip");
+    download_part_with_progress(app, PYTHON_EMBED_URL, &zip, "Downloading Python runtime…")?;
+
+    // Extract into a temp dir first, then move into place: antivirus scanners
+    // sometimes hold a transient lock on freshly written .pyd files, and a
+    // half-extracted python-embed would otherwise pass the python.exe check.
+    let tmp_dir = data_dir().join("python-embed.tmp");
+    fs::remove_dir_all(&tmp_dir).ok();
+    extract_zip_with_progress(app, &zip, &tmp_dir, "Installing Python runtime…")?;
+    fs::remove_file(&zip).ok();
+    fs::remove_dir(&work_dir).ok();
+
+    // Disable the ._pth: while one exists next to python.exe, embedded Python
+    // locks sys.path to the embed dir and ignores pyvenv.cfg entirely.
+    // Enumerated rather than hard-coded so a future 3.13 bump cannot silently
+    // leave a python313._pth active.
+    let mut disabled_any = false;
+    if let Ok(entries) = fs::read_dir(&tmp_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with("._pth") {
+                fs::rename(entry.path(), tmp_dir.join(format!("{}.disabled", name)))
+                    .map_err(|e| format!("Cannot disable {}: {}", name, e))?;
+                disabled_any = true;
+            }
+        }
+    }
+    if !disabled_any {
+        return Err(format!(
+            "No ._pth file found in {} — unexpected Python runtime layout",
+            tmp_dir.display()
+        ));
+    }
+
+    if !tmp_dir.join("python.exe").exists() {
+        return Err(format!("python.exe not found in {} after extraction", tmp_dir.display()));
+    }
+    fs::remove_dir_all(&py_dir).ok();
+    fs::rename(&tmp_dir, &py_dir)
+        .map_err(|e| format!("Cannot move Python runtime into place: {}", e))?;
+
+    log_shell(&format!("Portable Python ready at {}", py_dir.display()));
+    Ok(py_dir)
+}
+
+/// Rewrite venv\pyvenv.cfg so home/executable point at the portable runtime.
+/// No-op when the configured base interpreter still exists.
+fn repair_venv_if_needed(app: &AppHandle, backend: &PathBuf) -> Result<(), String> {
+    if !venv_needs_repair(backend) {
+        return Ok(());
+    }
+    let old_home = read_pyvenv_home(backend).unwrap_or_default();
+    log_shell(&format!("venv base python missing (home = {}), repairing", old_home));
+    emit_step(app, "Repairing Python runtime…", true);
+
+    let py_dir = ensure_portable_python(app)?;
+
+    let cfg_path = backend.join("venv").join("pyvenv.cfg");
+    // A missing or unreadable cfg is regenerated from scratch below.
+    let content = fs::read_to_string(&cfg_path).unwrap_or_default();
+
+    let mut seen_home = false;
+    let mut seen_executable = false;
+    let mut seen_version = false;
+    let mut new_lines: Vec<String> = Vec::new();
+    for line in content.lines() {
+        if let Some((key, _)) = line.split_once('=') {
+            match key.trim().to_ascii_lowercase().as_str() {
+                "home" => {
+                    new_lines.push(format!("home = {}", py_dir.display()));
+                    seen_home = true;
+                    continue;
+                }
+                "executable" => {
+                    new_lines.push(format!("executable = {}", py_dir.join("python.exe").display()));
+                    seen_executable = true;
+                    continue;
+                }
+                "version" => {
+                    // Keep the cfg consistent with the runtime we installed.
+                    new_lines.push(format!("version = {}", PYTHON_EMBED_VERSION));
+                    seen_version = true;
+                    continue;
+                }
+                "command" => continue, // stale build-machine venv command, drop it
+                _ => {}
+            }
+        }
+        new_lines.push(line.to_string());
+    }
+    if content.trim().is_empty() {
+        new_lines.push("include-system-site-packages = false".to_string());
+    }
+    if !seen_home {
+        new_lines.push(format!("home = {}", py_dir.display()));
+    }
+    if !seen_version {
+        new_lines.push(format!("version = {}", PYTHON_EMBED_VERSION));
+    }
+    if !seen_executable {
+        new_lines.push(format!("executable = {}", py_dir.join("python.exe").display()));
+    }
+    fs::write(&cfg_path, new_lines.join("\r\n") + "\r\n")
+        .map_err(|e| format!("Cannot rewrite {}: {}", cfg_path.display(), e))?;
+
+    log_shell(&format!("pyvenv.cfg repaired → home = {}", py_dir.display()));
+    Ok(())
 }
 
 // --- Backend launch ---
@@ -491,10 +683,21 @@ fn run_setup_flow(app: AppHandle) {
 
     // Step 2: start backend
     log_shell("Step 2: start_backend");
-    emit_step(&app, "Starting backend…", true);
     let backend = backend_dir();
     log_shell(&format!("backend = {}", backend.display()));
     log_shell(&format!("python = {}", python_exe(&backend).display()));
+
+    // Self-heal a non-relocatable venv (build-machine pyvenv.cfg → exit 103).
+    // Must run here rather than in first_run_setup: backend_exists() is true
+    // on already-installed broken machines, which skip Step 1 entirely.
+    if let Err(e) = repair_venv_if_needed(&app, &backend) {
+        log_shell(&format!("venv repair FAILED: {}", e));
+        eprintln!("[Setup] Venv repair failed: {}", e);
+        let _ = app.emit("setup_error", format!("Python runtime repair failed: {}", e));
+        return;
+    }
+
+    emit_step(&app, "Starting backend…", true);
     let child = match start_backend(&backend) {
         Ok(c) => {
             log_shell(&format!("start_backend OK, PID={}", c.id()));
