@@ -21,6 +21,7 @@ logs/
 *cookies*.txt
 core/youtube_cookies.txt
 core/ffmpeg/
+core/deno/
 core/downloads/
 core/models/
 installer_output/

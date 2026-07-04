@@ -16,6 +16,7 @@ import librosa
 import numpy as np
 
 from .config import get_setting, update_setting, get_ffmpeg_path, DOWNLOADS_DIR, ensure_valid_downloads_directory
+from .js_runtime import get_js_runtimes_config, ensure_deno_available
 
 # Path to cookies file (uploaded via admin panel)
 COOKIES_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'youtube_cookies.txt')
@@ -440,6 +441,10 @@ class DownloadManager:
         item.status = DownloadStatus.DOWNLOADING
         self.active_downloads[item.download_id] = item
         del self.queued_downloads[item.download_id]
+
+        # yt-dlp needs a JS runtime for YouTube challenges; fetch the bundled
+        # deno now if the startup thread hasn't (cheap no-op when present)
+        ensure_deno_available()
         
         # Notify download start
         if self.on_download_start:
@@ -498,14 +503,12 @@ class DownloadManager:
             'sleep_interval': 2,
             'max_sleep_interval': 5,
             'sleep_interval_requests': 1,
-            # YouTube 403 Fix: Use iOS client to bypass SABR streaming blocks (Jan 2026)
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['ios', 'web']
-                }
-            },
-            # Node.js runtime for YouTube JS challenge solving (Feb 2026)
-            'js_runtimes': {'node': {}},
+            # No player_client pin: the Jan 2026 ios+web pin now yields a single
+            # 360p format (iOS needs PO tokens); yt-dlp's own defaults give the
+            # full format list and evolve with the nightly auto-update.
+            # JS runtime for YouTube challenge solving: bundled deno first,
+            # system node as fallback (end-user PCs ship with neither)
+            'js_runtimes': get_js_runtimes_config(),
             # Cookies config added below
         }
 

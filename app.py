@@ -175,6 +175,24 @@ if HAS_YOUTUBE:
     import threading as _threading
     _threading.Thread(target=check_ytdlp_update, daemon=True).start()
 
+    def _ensure_js_runtime():
+        """Fetch the bundled Deno runtime if no JS runtime is present.
+
+        yt-dlp needs deno or node to solve YouTube's JS challenges; without
+        one, downloads fail with "Requested format is not available" on any
+        machine that doesn't happen to have Node installed.
+        """
+        try:
+            from core.js_runtime import ensure_deno_available
+            if ensure_deno_available():
+                logger.info("JS runtime for yt-dlp is available (deno/node)")
+            else:
+                logger.warning("No JS runtime (deno/node) — YouTube downloads may fail")
+        except Exception as e:
+            logger.warning(f"JS runtime check failed: {e}")
+
+    _threading.Thread(target=_ensure_js_runtime, daemon=True).start()
+
 # ------------------------------------------------------------------
 # Flask & SocketIO setup
 # ------------------------------------------------------------------

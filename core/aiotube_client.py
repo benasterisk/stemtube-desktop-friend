@@ -16,6 +16,7 @@ from bs4 import BeautifulSoup
 
 from .config import get_setting
 from .download_manager import get_youtube_cookies_config
+from .js_runtime import get_js_runtimes_config
 
 # Constants
 MAX_RESULTS_PER_PAGE = 50
@@ -109,11 +110,6 @@ class AiotubeClient:
                 'quiet': True,
                 'extract_flat': True,
                 'no_warnings': True,
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['ios', 'web']
-                    }
-                },
             }
             # Add cookies configuration (file or browser, with fallback)
             ydl_opts.update(get_youtube_cookies_config())
@@ -480,12 +476,7 @@ class AiotubeClient:
                 ydl_opts = {
                     'quiet': True,
                     'no_warnings': True,
-                    # YouTube 403 Fix: Use iOS client to bypass SABR streaming blocks (Jan 2026)
-                    'extractor_args': {
-                        'youtube': {
-                            'player_client': ['ios', 'web']
-                        }
-                    },
+                    'js_runtimes': get_js_runtimes_config(),
                 }
                 # Add cookies configuration (file or browser, with fallback)
                 ydl_opts.update(get_youtube_cookies_config())

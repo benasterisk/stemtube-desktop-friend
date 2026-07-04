@@ -20,6 +20,7 @@ from extensions import (
 )
 from core.logging_config import get_logger, log_with_context
 from core.download_manager import DownloadItem, DownloadType, DownloadStatus
+from core.js_runtime import get_js_runtimes_config
 from core.downloads_db import (
     find_global_download as db_find_global_download,
     add_user_access as db_add_user_access,
@@ -98,7 +99,7 @@ def get_video_formats(video_id):
         opts = {
             'quiet': True,
             'no_warnings': True,
-            'js_runtimes': {'node': {}},
+            'js_runtimes': get_js_runtimes_config(),
         }
         if os.path.exists(cookies_path) and os.path.getsize(cookies_path) > 0:
             opts['cookiefile'] = cookies_path
