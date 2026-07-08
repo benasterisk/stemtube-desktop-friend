@@ -17,10 +17,12 @@ Standalone Windows desktop application for YouTube audio downloading and AI-powe
 ## Requirements
 
 - **Windows 10/11** (64-bit)
-- **Python 3.12+** — [Download from python.org](https://www.python.org/downloads/) (NOT Windows Store)
-- **Node.js 20+** — [Download from nodejs.org](https://nodejs.org/) (needed for YouTube features)
+- **Python 3.12+** — [Download from python.org](https://www.python.org/downloads/) (NOT Windows Store; only for source installs — the packaged app ships its own)
 - **~4 GB disk space** (CPU mode) or **~8 GB** (GPU + pre-downloaded models)
 - **NVIDIA GPU** (optional) — For faster stem extraction and lyrics transcription
+
+No Node.js or Deno install is required: the app bundles a Deno runtime (and
+auto-downloads it if missing) for YouTube challenge solving.
 
 ## Quick Start
 
@@ -152,8 +154,10 @@ Key settings:
 ### "Python not found"
 Install Python 3.12+ from [python.org](https://www.python.org/downloads/). Check "Add to PATH" during installation.
 
-### "Node.js not found"
-Install Node.js 20+ from [nodejs.org](https://nodejs.org/). YouTube downloads may fail without it.
+### YouTube downloads fail with "Requested format is not available"
+yt-dlp needs a JavaScript runtime. The app bundles Deno under `core/deno/` and
+auto-downloads it at first start if missing — make sure the first launch has
+internet access. Installing Node.js 20+ also works as a fallback.
 
 ### "FFmpeg not found"
 Download FFmpeg from [ffmpeg.org](https://ffmpeg.org/download.html) and place `ffmpeg.exe` in `core/ffmpeg/bin/`.

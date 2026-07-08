@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Desktop Friend 1.0.1] - 2026-07-05
+
+### Added
+- **A/B loop** - Drag-select a region on any track's waveform (spans all tracks); seamless native Web Audio looping, Loop button in the transport bar
+- **Metronome instrument selector** - Real CC0 samples (congas, clave, cross-stick, cowbell, woodblock, shaker) in addition to the synthetic click/beep
+- **YouTube cookies upload UI** - Settings panel to upload a cookies.txt (fixes bot-detection/age-gated downloads)
+- **Bundled Deno JS runtime** - Ships in the backend (auto-downloaded as fallback); yt-dlp needs it to solve YouTube challenges, end-user PCs no longer need Node.js
+
+### Fixed
+- **Launcher: real CPU/GPU backend selection** - nvidia-smi result was ignored; CPU machines now get the 595 MB CPU archive instead of the 2.8 GB GPU one
+- **Launcher: venv self-repair** - Shipped venvs are not relocatable; the launcher now rewrites pyvenv.cfg against a portable CPython downloaded on demand (fixes exit code 103 on every non-build machine)
+- **Downloads failed with "Requested format is not available"** on machines without Node.js - bundled Deno + dropped the obsolete ios+web player_client pin (which limited every machine to a single 360p format; now full format list, opus audio, up to 2160p)
+- **Mixer stuck loading on CPU installs** - the CPU archive shipped madmom 0.16.1 (incompatible with numpy 1.26, beat analysis crashed); now ships the VS-built 0.17.dev0
+- **Count-in played only 2 clicks** regardless of the 2/4/8 setting
+- **Chord tab lyrics placement** - word-level alignment on the beat grid (was chaotic under chords)
+- **Startup timeout on slow machines** - yt-dlp update check moved off the critical path (37s → 4s to port bind), launcher budget raised 120s → 300s for cold first boots
+
+---
+
 ## [2.2.0] - 2026-01-25
 
 ### Added
