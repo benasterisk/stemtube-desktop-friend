@@ -24,7 +24,13 @@ Standalone Windows desktop application for YouTube audio downloading and AI-powe
 No Node.js or Deno install is required: the app bundles a Deno runtime (and
 auto-downloads it if missing) for YouTube challenge solving.
 
-## Quick Start
+## Install (recommended)
+
+Download and run **[StemTube_Desktop_Friend_1.0.1_x64-setup.exe](https://github.com/benasterisk/stemtube-desktop-friend-releases/releases/latest)** (1.4 MB).
+
+On first launch the app detects your hardware and downloads the matching engine automatically — **CPU** (~640 MB) or **NVIDIA GPU** (~2.9 GB, CUDA accelerated) — then repairs its Python runtime if needed. First boot can take a few minutes; later launches are instant. Everything (Python, FFmpeg, Deno) is bundled or fetched automatically.
+
+## Quick Start (from source)
 
 ### Option 1: Double-click launcher
 1. Place the `Stemtube_Desktop` folder on your Windows machine
