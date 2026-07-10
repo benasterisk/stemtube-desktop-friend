@@ -9,7 +9,6 @@ Standalone Windows desktop application for YouTube audio downloading and AI-powe
 - **Stem Extraction** — AI-powered source separation using Demucs (vocals, drums, bass, other, piano, guitar)
 - **Chord Detection** — Real-time chord display with BTC Transformer (170 chords) + madmom fallback
 - **Lyrics Transcription** — Word-level timestamps via faster-whisper + LrcLib synced lyrics
-- **Structure Analysis** — Song section detection (verse, chorus, bridge) via MSAF
 - **Mixer** — Full-featured audio mixer with pitch/tempo control, karaoke display, waveform visualization
 - **Multi-track Recording** — Record over stems with timeline positioning
 - **GPU Acceleration** — Automatic NVIDIA CUDA detection (falls back to CPU)
@@ -115,7 +114,6 @@ Stemtube_Desktop/
 │   ├── hybrid_chord_detector.py  # Multi-backend fallback
 │   ├── lyrics_detector.py   # faster-whisper transcription
 │   ├── lyrics_aligner.py    # LrcLib + Whisper alignment
-│   ├── structure_detector.py # MSAF song structure
 │   ├── db/                  # SQLite database layer
 │   └── downloads/           # Processed audio files
 │
