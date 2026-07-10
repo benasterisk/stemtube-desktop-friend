@@ -1,6 +1,6 @@
 # StemTube Desktop
 
-Standalone Windows desktop application for YouTube audio downloading and AI-powered music analysis. Extracts stems, detects chords, transcribes lyrics, and analyzes song structure — all locally on your machine.
+Standalone Windows desktop application for YouTube audio downloading and AI-powered music analysis. Extracts stems, detects chords and transcribes lyrics — all locally on your machine.
 
 ## Features
 
