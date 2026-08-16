@@ -128,16 +128,98 @@ def launch_native_window(port):
             pass
 
 
-def launch_browser(port):
-    """Fallback: open in default browser."""
-    url = f'http://127.0.0.1:{port}'
-    print(f"[LAUNCHER] Opening {url} in default browser...")
-    webbrowser.open(url)
+def _open_in_browser(url):
+    print(f"[LAUNCHER] Opening {url} in your default browser...")
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
+        if webbrowser.open(url):
+            return True
+    except Exception as e:
+        print(f"[LAUNCHER] webbrowser.open failed ({e}).")
+    try:
+        import subprocess
+        subprocess.Popen(['xdg-open', url],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
         pass
+    print(f"[LAUNCHER] Open this address in your browser:  {url}")
+    return False
+
+
+def launch_control_window(port):
+    """Small native control window (Tkinter) that manages the server on Linux.
+
+    The GUI renders in the user's real browser (Firefox/Chrome…), which — unlike
+    the WebKitGTK webview pywebview would use — supports localStorage and Web
+    Audio correctly. This little window just opens the browser, shows the status,
+    and quits the server cleanly on close (no orphaned background process).
+    Falls back to a headless keep-alive loop if Tkinter is unavailable.
+    """
+    url = f'http://127.0.0.1:{port}'
+    try:
+        import tkinter as tk
+        from tkinter import font as tkfont
+    except Exception as e:
+        print(f"[LAUNCHER] Tkinter unavailable ({e}); running headless.")
+        _open_in_browser(url)
+        print("[LAUNCHER] StemTube is running. Press Ctrl+C to quit.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        return
+
+    _open_in_browser(url)
+
+    root = tk.Tk()
+    root.title("StemTube Desktop Friend")
+    try:
+        root.geometry("360x200")
+        root.resizable(False, False)
+    except Exception:
+        pass
+
+    title_font = tkfont.Font(size=14, weight="bold")
+    tk.Label(root, text="StemTube Desktop Friend", font=title_font).pack(pady=(18, 4))
+    tk.Label(root, text="Running — open in your browser:").pack()
+    link = tk.Label(root, text=url, fg="#2563eb", cursor="hand2")
+    link.pack(pady=(0, 12))
+    link.bind("<Button-1>", lambda _e: _open_in_browser(url))
+
+    btns = tk.Frame(root)
+    btns.pack(pady=6)
+    tk.Button(btns, text="Open StemTube", width=14,
+              command=lambda: _open_in_browser(url)).grid(row=0, column=0, padx=6)
+
+    def quit_app():
+        print("[LAUNCHER] Quit requested — shutting down.")
+        try:
+            root.destroy()
+        finally:
+            os._exit(0)
+
+    tk.Button(btns, text="Quit", width=10, command=quit_app).grid(row=0, column=1, padx=6)
+    tk.Label(root, text="Closing this window stops StemTube.",
+             fg="#888").pack(side="bottom", pady=(0, 10))
+    root.protocol("WM_DELETE_WINDOW", quit_app)
+    root.mainloop()
+    os._exit(0)
+
+
+# Backwards-compatible alias.
+def launch_browser(port):
+    launch_control_window(port)
+
+
+def _use_native_window():
+    """Linux → browser (WebKitGTK webview is too buggy); Windows/macOS → webview.
+    Override with STEMTUBE_FORCE_WEBVIEW=1 (native) or --no-window (browser)."""
+    if args.no_window:
+        return False
+    if os.environ.get('STEMTUBE_FORCE_WEBVIEW') == '1':
+        return True
+    return not sys.platform.startswith('linux')
 
 
 def main():
@@ -156,9 +238,17 @@ def main():
     print(f"[LAUNCHER] Server ready on http://127.0.0.1:{port}")
 
     if args.no_window:
-        launch_browser(port)
+        _open_in_browser(f'http://127.0.0.1:{port}')
+        print("[LAUNCHER] StemTube is running (headless). Press Ctrl+C to quit.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+    elif _use_native_window():
+        launch_native_window(port)   # Windows/macOS: embedded WebView2/WKWebView
     else:
-        launch_native_window(port)
+        launch_control_window(port)  # Linux: small Tk control window + real browser
 
 
 if __name__ == '__main__':
