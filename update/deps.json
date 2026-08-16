@@ -1,0 +1,26 @@
+{
+  "_comment": "Machine-readable lockfile of the PURE-PYTHON pip deps that the auto-updater may install into an installed Friend app without a full rebuild. Source of truth for gen_manifest.py's pip_installs diff. Compiled/heavy deps (torch, torchaudio, demucs, madmom, faster-whisper) are NOT listed — changing them requires a full release. pywebview is intentionally excluded: the Linux GUI no longer uses a webview. Keep in sync when adding a pure dep the app imports at runtime.",
+  "edition": "friend",
+  "pip_pure": [
+    "flask",
+    "flask-login",
+    "flask-session",
+    "flask-socketio",
+    "eventlet",
+    "requests",
+    "python-dotenv",
+    "Pillow",
+    "librosa",
+    "soundfile",
+    "scipy",
+    "scikit-learn",
+    "numpy",
+    "psutil",
+    "yt-dlp[default]",
+    "syncedlyrics",
+    "pychord",
+    "mir_eval",
+    "beautifulsoup4",
+    "werkzeug"
+  ]
+}

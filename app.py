@@ -24,6 +24,17 @@ if sys.stdout and hasattr(sys.stdout, 'buffer'):
 if sys.stderr and hasattr(sys.stderr, 'buffer'):
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
+# In-app auto-updater: normally driven by launcher.py (run_update_with_progress)
+# BEFORE the server starts, so it can show a progress window and restart cleanly.
+# Guarded fallback here for direct `python app.py` starts: the env sentinel makes
+# this a no-op when the launcher already ran it; skipped during demucs sub-proc.
+try:
+    if os.environ.get('_STEMTUBE_UPDATE_DONE') != '1':
+        from core.updater import check_and_apply as _stemtube_check_updates
+        _stemtube_check_updates()
+except Exception:
+    pass
+
 def configure_gpu_and_restart():
     """
     Configure LD_LIBRARY_PATH for CUDA/cuDNN and restart Python if needed.
